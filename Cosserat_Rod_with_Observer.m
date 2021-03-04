@@ -1,82 +1,89 @@
 clear variables
 clc
 
+dt=0.005;  % Sampling time in seconds
+t_total=5;  % Simultion time in seconds
+t=0:dt:t_total;
 
-dt=0.005;
-t=1:dt:1;
-r_end=[];
-u_end=[];
-V=0.01;
-u_0 = [0, 0 ,0]';
-f=[0 0 0]';  
+% Initializing simulation parameters
+u_0 = [0, 0 ,0]';  % Initial Guess for rod's curvature at its base
 P=eye(3,3);
 T=[];
 U=[];
+r_end=[];   % Cartesian coordinates of the rod backbone
+u_end=[];   % Instantaneous curvature of the rod's tip
 for i=1:length(t)
-tic
-q=[V*t(i) 2*pi*t(i)/10];
-f=[1*sin(2*pi*t(i)/10) 1*cos(2*pi*t(i)/10) 1*sin(2*pi*t(i)/10)]';    
-[r,u, B] =moving_CTR(q, u_0, f);
 
-us=[5 3 0]';
+V=0.01;    
+q=[V*t(i) 2*pi*t(i)/10];  % rods insertion and rotation
+f=[1*sin(2*pi*t(i)/10) 1*cos(2*pi*t(i)/10) 1*sin(2*pi*t(i)/10)]'; % External Force 
 
-r_end=[r_end;r(end,:)];
-u_end=[u_end,norm(u)];
-A=V*eye(3,3);
-Q=30*eye(3,3);
-R=120*eye(3,3);  % inverse of R
-dP=-A.' *P -P*A- P*B*R*B.'*P+Q;
-du0=-R*B.'*P*u;
+% solving rod's model (equations 8 and 9), inputs are: rods insertion and rotation,
+% initial curvature, external forces, respectively.
+[r,u, B] =moving_rod(q, u_0, f);  
 
-P= P + dt.* dP;
-u_0= u_0 + dt.* du0;
-U=[U;u_0'];
-
-time=toc;
-T=[T,time];
+if rem(i,50)==1
+    % plotting rod's backbone
+    p1=plot3(r(:,1), r(:,2), r(:,3), 'k', 'LineWidth', 1);
+    hold on
 end
 
 
+A=V*eye(3,3);  % gamma (equation 3a)
+Q=30*eye(3,3);
+R=120*eye(3,3);  % inverse of R
+
+% Observer (equations 11 and 12)
+dP=-A.' *P -P*A- P*B*R*B.'*P+Q;
+du0=-R*B.'*P*u;
+P= P + dt.* dP;
+u_0= u_0 + dt.* du0;
+
+% recording rod's tip position
+r_end=[r_end;r(end,:)];  % rod's tip position
+
+end
 
 
-plot3(r_end(:,1),r_end(:,2),r_end(:,3), 'LineWidth', 3)
-
-
+% plot rod's tip position
+p2 = plot3(r_end(:,1),r_end(:,2),r_end(:,3),'r', 'LineWidth', 3);
+legend([p1 p2],'Rod Backbone','Rod Tip Trajectory','Location','NorthWest')
+axis equal
+grid on
 
 
 %% main ode solver
-function [r, u, dU0] = moving_CTR(q, u_0, f)
+function [r, u, dU0] = moving_rod(q, u_0, f)
 
 
-% length of tubes
+% length of the rod
 l=1e-3.*400;
-% physical parameters
+% physical parameters of the rod (Table 1)
 E=70e9;
 r1 =(1.5)*1e-3;
 r2=(1)*1e-3;
-
 J= pi/2*(r1^4-r2^4);
 I=  0.5 * J;
 G=10e9; 
+% pre-curvature of the rod
 Ux=14;
 Uy=5;
 Uz=0;
 
 q_0=[-0.2 0]';
-B=q(1)+q_0(1);  % length of tubes before template
+B=q(1)+q_0(1);  % length of the rod before template
 %initial angles
 alpha=q(2)+q_0(2);
-alpha_1=alpha(1);
 
 
-%% Solving ode for shape
+
+%% Solving ode for shape of the rod
 r=[];
-r0=[0 0 0]'; R0=[cos(alpha_1) -sin(alpha_1) 0; sin(alpha_1) cos(alpha_1) 0; 0 0 1];
+r0=[0 0 0]'; R0=[cos(alpha) -sin(alpha) 0; sin(alpha) cos(alpha) 0; 0 0 1];
 R0=reshape(R0',[9,1]);
-du0=reshape(eye(3,3)',[9,1]);
-%alpha=alpha-B.*uz_0'; 
-    
+du0=reshape(eye(3,3)',[9,1]);    
 s_span =[0 l+B]; 
+
 % initial conditions
 y0=zeros(15+9+9,1);
 y0(1:3,1)=u_0;
@@ -84,8 +91,6 @@ y0(4:15,1)=[r0 ; R0];
 y0(16:24,1)=du0;
 
 [~,y] = ode23(@(s,y) ode(s,y,Ux,Uy,Uz,E.*I',G.*J, f,u_0), s_span, y0);
-% first n elements of y are curvatures along z, e.g., y= [ u1_z  u2_z ... ]
-% last n elements of y are twist angles, alpha_i
 shape=[y(:,4),y(:,5),y(:,6)];
 r=[r; shape];
 u=y(end,1:3)';
@@ -93,7 +98,7 @@ dU0=reshape(y(end,16:24),[3,3])';
 end
 
 
-%% ODE
+%% ODE (equations 8 and 9)
 function dydt = ode(~,y,Ux,Uy,Uz,EI,GJ, f,u_0)
 
 dydt=zeros(15+9+9,1);
