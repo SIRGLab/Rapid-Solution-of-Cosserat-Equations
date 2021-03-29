@@ -1,0 +1,21 @@
+<launch>
+    <arg name="xacro_robot_file" value="$(find ctr_model)/urdf/ctr_model.xacro"/>
+    <param name="robot_description" command="$(find xacro)/xacro '$(arg xacro_robot_file)'"/>
+
+    <arg name="xacro_object_file" value="$(find ctr_model)/urdf/ctr_object.xacro"/>
+    <param name="robot_object" command="$(find xacro)/xacro '$(arg xacro_object_file)'"/>
+
+	  <rosparam command="load" file="$(find ctr_model)/config/config.yaml" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+    <node name="rviz" pkg="rviz" type="rviz" args=" -d $(find ctr_model)/launch/config.rviz" />
+    
+  <node name="ctr_model" pkg="ctr_model" type="ctr_model" output="screen" >
+
+  </node>
+
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
+        <param name="use_gui" value="False"/>
+    </node>
+  <!-- Start up the dynamic reconfigure GUI. -->
+  <node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconfigure"/>
+</launch>
